@@ -1,0 +1,24 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "chrome-devtools": {
+        "type": "local",
+        "command": [
+          "npx",
+          "-y",
+          "chrome-devtools-mcp@latest",
+          "--headless",
+          "--no-usage-statistics",
+          "--isolated",
+          "--executablePath=/run/current-system/sw/bin/chromium"
+        ]
+      }
+    }
+  },
+  "plugins": [
+    "@dietrichgebert/ponytail",
+    "@slkiser/opencode-quota",
+    "@anthonyhaussman/opencode-agy-auth"
+  ]
+}
