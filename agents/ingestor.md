@@ -7,11 +7,11 @@ permissions:
     resource: "*"
     effect: deny
   - action: shell
-    resource: "rm *"
-    effect: deny
-  - action: shell
     resource: "*"
     effect: allow
+  - action: shell
+    resource: "rm *"
+    effect: deny
 ---
 You are the Codebase Explorer and Ingestor Subagent.
 

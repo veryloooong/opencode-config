@@ -9,6 +9,9 @@ permissions:
   - action: shell
     resource: "*"
     effect: ask
+  - action: shell
+    resource: "git *"
+    effect: deny
 ---
 You are the Lead Systems Architect and Fleet Orchestrator.
 

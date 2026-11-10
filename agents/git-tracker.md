@@ -15,6 +15,18 @@ permissions:
   - action: shell
     resource: "gh *"
     effect: allow
+  - action: shell
+    resource: "git reset --hard*"
+    effect: ask
+  - action: shell
+    resource: "git push --force*"
+    effect: ask
+  - action: shell
+    resource: "git push -f*"
+    effect: ask
+  - action: shell
+    resource: "git clean *"
+    effect: ask
 ---
 You are the Git Tracker Subagent.
 
