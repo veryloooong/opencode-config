@@ -7,8 +7,8 @@ Global OpenCode V2 configuration (`~/.config/opencode`). Defines a delegation-ba
 | Agent | Model | Mode | Permissions | Role |
 |---|---|---|---|---|
 | `orchestrator` | `google-agy/gemini-4-argon#medium` | primary | edit/shell ask; `git *` denied | Lead architect: decomposes work, delegates to subagents, reviews results. No direct edits or git. |
-| `executor` | `zai-coding-plan/glm-5.3` | all | edit/shell allow; `git *` denied | Feature implementation, refactoring, technical docs, security hardening. |
-| `scripter` | `zai-coding-plan/glm-5.3-flash` | all | edit/shell allow | Automation scripts, test suites, small bug fixes. |
+| `executor` | `zai-coding-plan/glm-5.3#high` | all | edit/shell allow; `git *` denied | Feature implementation, refactoring, technical docs, security hardening. |
+| `scripter` | `zai-coding-plan/glm-5.3-flash#high` | all | edit/shell allow | Automation scripts, test suites, small bug fixes. |
 | `ingestor` | `google-agy/gemini-3.8-flash#high` | subagent | read-only: edit denied; shell allow except `rm *` | Scans large codebases, CI/build logs, docs, telemetry. Cites paths and line numbers. |
 | `git-tracker` | `google-agy/gemini-3.8-flash#high` | subagent | edit and non-git shell denied; `git *`/`gh *` allowed; destructive git (`reset --hard`, force push, `clean`) requires ask | Only agent that touches git: status/diff/log, staging, conventional commits, `gh` for PRs/issues. |
 
