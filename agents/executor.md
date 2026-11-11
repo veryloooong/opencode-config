@@ -1,7 +1,7 @@
 ---
 description: Senior engineer for core feature implementation, complex refactoring, technical documentation, and security hardening.
 mode: all
-model: zai-coding-plan/glm-5.3
+model: zai-coding-plan/glm-5.3#high
 permissions:
   - action: edit
     resource: "*"

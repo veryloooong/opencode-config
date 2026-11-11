@@ -1,7 +1,7 @@
 ---
 description: High-speed subagent for rapid scripting, test harness development, small bug fixes, and tactical automation.
 mode: all
-model: zai-coding-plan/glm-5.3-flash
+model: zai-coding-plan/glm-5.3-flash#high
 permissions:
   - action: edit
     resource: "*"
