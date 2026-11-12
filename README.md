@@ -20,6 +20,8 @@ Built-in default agents (`build`, `plan`, `general`, `explore`) are disabled in 
 ## Commands (`commands/`)
 
 - **`/plan <objective>`** — runs on `orchestrator`. Collects the objective plus current `git status`, decomposes it into milestones, and produces a task checklist with assigned subagents, verification/rollback criteria, and least-privilege delegation. Read-only: no modifications during planning.
+- **`/swarm <objective>`** (`commands/swarm.md`) — runs on `orchestrator`. Executes a 5-stage multi-agent swarm pipeline (`Recon` -> `DAG Wave Plan` -> `Parallel Wave Execution` -> `Verify Gate` -> `Git-Tracker Wrap`) with strictly disjoint `files_touched` per wave and hashed state persistence in `.swarm/swarm-<hash>.json` (mirrored to `.swarm/latest.json`).
+- **`/swarm_status [hash]`** (`plugins/opencode-swarm-ui`) — renders the live and historical swarm status GUI (stage pipeline, wave/task progress bars, active subagents, and hashed run history) with zero LLM context pollution.
 
 ## Plugins & MCP
 
@@ -29,6 +31,7 @@ Configured in `opencode.json` (plus `opencode-quota/settings.jsonc` and `cli.jso
   - `@dietrichgebert/ponytail` — minimal-diff coding discipline.
   - `@slkiser/opencode-quota` — quota display; tuned in `opencode-quota/settings.jsonc` (line bar, 5-hour status window, no toasts).
   - `@anthonyhaussman/opencode-agy-auth` — auth for the `google-agy` provider.
+  - `./plugins/opencode-swarm-ui` — local OpenCode V2 server + TUI plugin: `sidebar.content` collapsible Swarm Fleet tracker, `session.composer.top` interactive `/swarm_status` window, and context-stripping hooks.
 - **MCP server: `chrome-devtools`** — `chrome-devtools-mcp@latest` driving headless Chromium (`/run/current-system/sw/bin/chromium`), isolated, no usage statistics.
 - **`cli.json`** — TUI theme only.
 
@@ -39,3 +42,4 @@ Runtime files not tracked:
 - `service.json`
 - `antigravity-signature-cache.json`
 - `antigravity-turn-states.json`
+- `.swarm/` — hashed swarm run ledgers (`.swarm/swarm-<hash>.json` and `.swarm/latest.json`).

@@ -2,3 +2,4 @@ service.json
 antigravity-signature-cache.json
 antigravity-turn-states.json
 .gitignore
+.swarm/

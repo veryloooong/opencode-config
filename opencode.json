@@ -34,6 +34,7 @@
   "plugins": [
     "@dietrichgebert/ponytail",
     "@slkiser/opencode-quota",
-    "@anthonyhaussman/opencode-agy-auth"
+    "@anthonyhaussman/opencode-agy-auth",
+    "./plugins/opencode-swarm-ui"
   ]
 }
