@@ -11,8 +11,9 @@ Global OpenCode V2 configuration (`~/.config/opencode`). Defines a delegation-ba
 | `scripter` | `zai-coding-plan/glm-5.3-flash#high` | all | edit/shell allow | Automation scripts, test suites, small bug fixes. |
 | `ingestor` | `google-agy/gemini-3.8-flash#high` | subagent | read-only: edit denied; shell allow except `rm *` | Scans large codebases, CI/build logs, docs, telemetry. Cites paths and line numbers. |
 | `git-tracker` | `google-agy/gemini-3.8-flash#high` | subagent | edit and non-git shell denied; `git *`/`gh *` allowed; destructive git (`reset --hard`, force push, `clean`) requires ask | Only agent that touches git: status/diff/log, staging, conventional commits, `gh` for PRs/issues. |
+| `solo` | (session default) | primary | edit/shell allow; `subagent *` denied | Standalone senior software/security engineer for single-session execution without subagent delegation. |
 
-Only `git-tracker` runs git commands; every other agent's prompt forbids it.
+In the multi-agent fleet (`orchestrator`/`executor`), git is delegated exclusively to `git-tracker` and every other agent's prompt forbids it; `solo` operates standalone and executes tasks directly in a single session, including git.
 
 Built-in default agents (`build`, `plan`, `general`, `explore`) are disabled in `opencode.json` (`agents.<name>.disabled: true`), with `orchestrator` set as `default_agent`.
 
