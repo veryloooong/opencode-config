@@ -14,6 +14,8 @@ Global OpenCode V2 configuration (`~/.config/opencode`). Defines a delegation-ba
 
 Only `git-tracker` runs git commands; every other agent's prompt forbids it.
 
+Built-in default agents (`build`, `plan`, `general`, `explore`) are disabled in `opencode.json` (`agents.<name>.disabled: true`), with `orchestrator` set as `default_agent`.
+
 ## Commands (`commands/`)
 
 - **`/plan <objective>`** — runs on `orchestrator`. Collects the objective plus current `git status`, decomposes it into milestones, and produces a task checklist with assigned subagents, verification/rollback criteria, and least-privilege delegation. Read-only: no modifications during planning.
