@@ -61,12 +61,33 @@ function statusColor(theme, status) {
   if (status === "failed") return theme.text.feedback.error.base;
   return theme.text.muted;
 }
-function progressBar(done, total, width = 16) {
-  const filled = total > 0 ? Math.round((done / total) * width) : 0;
-  return "█".repeat(filled) + "░".repeat(Math.max(0, width - filled));
+function barParts(done, total, width = 16) {
+  const filled = total > 0 ? Math.max(0, Math.min(width, Math.round((done / total) * width))) : 0;
+  return ["━".repeat(filled), "─".repeat(Math.max(0, width - filled))];
 }
 function percent(done, total) {
   return total > 0 ? Math.round((done / total) * 100) : 0;
+}
+/** Splits a report line holding a ━/─ task bar into its segments; null when it has no bar. */
+function barSegments(line) {
+  const match = /^(.*?)(━+)(─+)(.*)$/.exec(line);
+  return match ? { before: match[1], full: match[2], empty: match[3], after: match[4] } : null;
+}
+/** A bar's spans, LineText-style: filled part in the run's color, the rest muted. */
+function barSpans(api, status, before, full, empty, after) {
+  const theme = () => api.theme;
+  const span = (text, fg) => {
+    var _s = _$createElement("span");
+    _$insert(_s, () => text);
+    _$effect((_$p) => _$setProp(_s, "style", { fg }, _$p));
+    return _s;
+  };
+  return [
+    ...(before ? [span(before, theme().text.base)] : []),
+    span(full, statusColor(theme(), status)),
+    span(empty, theme().text.muted),
+    ...(after ? [span(after, theme().text.muted)] : []),
+  ];
 }
 function stageLabel(run) {
   const stage = typeof run?.stage === "string" && run.stage ? run.stage : "execute";
@@ -351,14 +372,26 @@ function createSwarmWindow(api, swarm) {
       _$insert(
         _scroll,
         () =>
-          bodyLines().map((line) =>
-            _$createComponent(TextLine, {
-              text: line,
-              get fg() {
-                return lineColor(line);
-              },
-            }),
-          ),
+          bodyLines().map((line) => {
+            const bar = barSegments(line);
+            if (!bar) {
+              return _$createComponent(TextLine, {
+                text: line,
+                get fg() {
+                  return lineColor(line);
+                },
+              });
+            }
+            return (() => {
+              var _barLine = _$createElement("text");
+              _$setProp(_barLine, "wrapMode", "none");
+              _$setProp(_barLine, "selectable", false);
+              _$setProp(_barLine, "flexShrink", 0);
+              const subject = swarm.snapshot()?.active ?? swarm.snapshot()?.runs?.[0];
+              _$insert(_barLine, () => barSpans(api, subject?.status, bar.before, bar.full, bar.empty, bar.after));
+              return _barLine;
+            })();
+          }),
         null,
       );
       _$insertNode(_el, _hint);
@@ -449,9 +482,14 @@ function SwarmSidebar(props) {
                 _$insert(
                   _bar,
                   () =>
-                    `${progressBar(doneCount(), tasks().length)} ${percent(doneCount(), tasks().length)}% (${doneCount()}/${tasks().length})`,
+                    barSpans(
+                      api,
+                      run()?.status,
+                      "",
+                      ...barParts(doneCount(), tasks().length),
+                      `  ${percent(doneCount(), tasks().length)}% (${doneCount()}/${tasks().length})`,
+                    ),
                 );
-                _$effect((_$p) => _$setProp(_bar, "fg", theme().text.base, _$p));
                 _$insert(
                   _body,
                   () =>

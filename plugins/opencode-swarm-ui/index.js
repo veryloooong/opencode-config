@@ -323,9 +323,13 @@ function pipelineLine(run) {
   return line;
 }
 
+export function barParts(done, total, width = 20) {
+  const filled = total > 0 ? Math.max(0, Math.min(width, Math.round((done / total) * width))) : 0;
+  return ["━".repeat(filled), "─".repeat(Math.max(0, width - filled))];
+}
 function progressBar(done, total, width = 20) {
-  const filled = total > 0 ? Math.round((done / total) * width) : 0;
-  return "█".repeat(filled) + "░".repeat(Math.max(0, width - filled));
+  const [full, empty] = barParts(done, total, width);
+  return full + empty;
 }
 
 const TABLE_HEADS = ["Task ID", "Agent", "Status", "Files"];
