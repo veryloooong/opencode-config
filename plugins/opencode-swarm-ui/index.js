@@ -3,8 +3,8 @@
  *
  * Reads the swarm orchestrator's state directory (`.swarm/`: `latest.json` plus hashed
  * `swarm-<hash>.json` runs), overlays live in-memory subagent events, and serves it three
- * ways: the `SwarmRpc` snapshot/selectRun RPC (the TUI sidebar and status window), the
- * `/swarm_status` slash command (Web/Desktop), and a Unicode fleet-status box report.
+ * ways: the `SwarmRpc` snapshot/selectRun RPC (the TUI sidebar and status window) and a
+ * Unicode fleet-status box report.
  * Reports are posted with the same zero-context-pollution pattern as @slkiser/opencode-quota:
  * `delivery: "steer"`, `resume: false`, a metadata key to drop the message by, and
  * `[OpenCode Swarm status]` fences to cut it back out of compaction checkpoints.
@@ -513,33 +513,6 @@ const swarmServerPlugin = Plugin.define({
         if (!liveEvents.signal.aborted) warn("event subscription stopped", error);
       }
     })();
-
-    // Web and Desktop list this in their "/" menu and get the report as a chat message. The
-    // TUI intercepts a typed /swarm_status and opens its status window instead.
-    await ctx.command.transform((editor) => {
-      editor.add({
-        name: "swarm_status",
-        description: "Swarm fleet status GUI (optional argument: a run hash, /swarm_status <id>).",
-        async execute(invocation) {
-          const argument = str(invocation.prompt?.text).trim().split(/\s+/)[0];
-          const selectedId = argument ? argument.replace(/^#/, "").toLowerCase() : undefined;
-          const snapshot = buildSnapshot(swarmDir, live);
-          const report = formatSwarmStatusBox(snapshot, selectedId);
-          // A message admitted while the AI works is delivered into that turn at its next
-          // step. Wait until the session is idle.
-          await ctx.session.wait({ sessionID: invocation.sessionID });
-          // resume: false admits the report without starting a model turn; "steer" delivers
-          // it together with the user's next message, never on its own.
-          await ctx.session.prompt({
-            sessionID: invocation.sessionID,
-            text: `${SWARM_REPORT_START}\n${report}\n${SWARM_REPORT_END}`,
-            metadata: { [SWARM_REPORT_METADATA_KEY]: { command: "swarm_status", at: Date.now() } },
-            delivery: "steer",
-            resume: false,
-          });
-        },
-      });
-    });
 
     // Keep swarm reports out of every model request built from session history: normal
     // turns, compaction summaries, and generate requests — zero context window pollution.
