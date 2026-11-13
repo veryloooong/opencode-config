@@ -1,24 +1,20 @@
 import { createComponent as _$createComponent } from "@opentui/solid";
 import { createElement as _$createElement } from "@opentui/solid";
-import { createTextNode as _$createTextNode } from "@opentui/solid";
 import { effect as _$effect } from "@opentui/solid";
 import { insert as _$insert } from "@opentui/solid";
 import { insertNode as _$insertNode } from "@opentui/solid";
 import { setProp as _$setProp } from "@opentui/solid";
-import { use as _$use } from "@opentui/solid";
 /** @jsxImportSource @opentui/solid */
 /**
  * OpenCode Swarm UI — TUI plugin.
  *
- * Draws the swarm state the server plugin reads from `.swarm/`:
- *   - the Swarm Fleet panel in the session sidebar (click the title to collapse it),
- *   - the status window above the message box, opened by a typed /swarm_status (intercepted
- *     here, so nothing reaches the chat or the context window) or by the command palette
- *     ("Swarm: Status Window"). Tabs: [1] Active Swarm (the Unicode fleet-status box),
- *     [2] Waves & Tasks, [3] Hashed History (.swarm/) with ↑/↓ cycling the hashed runs.
+ * Draws the swarm state the server plugin reads from `.swarm/` as the Swarm Fleet panel in
+ * the session sidebar (click the title to collapse it). The `/swarm_status` chat report is
+ * served by the server plugin's context-stripping hooks, not here.
  *
  * Data comes over the Swarm RPC: the `snapshot` call on mount, every `changed` event, and a
- * 2s poll while a swarm is running (or while the window is open) in case an event was missed.
+ * 3s poll while the sidebar is open (or a swarm is running) in case an event was missed —
+ * so new `.swarm/` runs are picked up even without an event.
  */
 // Plugin.define is identity in OpenCode V2 (returns the { id, setup } definition), so keep a
 // local shim instead of importing @opencode/plugin/tui, unresolvable outside the host.
@@ -26,17 +22,7 @@ const Plugin = { define: (definition) => definition };
 import { createSignal, onCleanup, Show } from "solid-js";
 import { SwarmRpc } from "./rpc.js";
 
-const POLL_MS = 2_000;
-/** Above OpenCode's textarea layer, which submits the prompt on Enter. */
-const TYPED_COMMAND_PRIORITY = 1;
-const WINDOW_KEY_PRIORITY = 10;
-const WINDOW_TITLE = "Swarm Fleet Status";
-const KEYS = "Swarm window";
-const TABS = [
-  ["active", "[1] Active Swarm"],
-  ["waves", "[2] Waves & Tasks"],
-  ["history", "[3] Hashed History (.swarm/)"],
-];
+const POLL_MS = 3_000;
 const TASK_ICON = { done: "✓", completed: "✓", running: "●", failed: "✗", pending: "○" };
 const STATUS_ICON = { running: "●", completed: "✓", failed: "✗", idle: "○" };
 
@@ -68,12 +54,7 @@ function barParts(done, total, width = 16) {
 function percent(done, total) {
   return total > 0 ? Math.round((done / total) * 100) : 0;
 }
-/** Splits a report line holding a ━/─ task bar into its segments; null when it has no bar. */
-function barSegments(line) {
-  const match = /^(.*?)(━+)(─+)(.*)$/.exec(line);
-  return match ? { before: match[1], full: match[2], empty: match[3], after: match[4] } : null;
-}
-/** A bar's spans, LineText-style: filled part in the run's color, the rest muted. */
+/** A bar's spans, LineText-style: filled part in a visible run color, the rest muted. */
 function barSpans(api, status, before, full, empty, after) {
   const theme = () => api.theme;
   const span = (text, fg) => {
@@ -82,9 +63,15 @@ function barSpans(api, status, before, full, empty, after) {
     _$effect((_$p) => _$setProp(_s, "style", { fg }, _$p));
     return _s;
   };
+  const filledColor =
+    status === "failed"
+      ? theme().text.feedback.error.base
+      : status === "completed" || status === "done"
+        ? theme().text.feedback.success.base
+        : (theme().hue?.accent?.[500] ?? theme().text.feedback?.info?.base ?? theme().text.base);
   return [
     ...(before ? [span(before, theme().text.base)] : []),
-    span(full, statusColor(theme(), status)),
+    span(full, filledColor),
     span(empty, theme().text.muted),
     ...(after ? [span(after, theme().text.muted)] : []),
   ];
@@ -146,7 +133,8 @@ function createSwarmClient(api, wantsLivePolling) {
     void load();
     const timer = setInterval(() => {
       const current = snapshot();
-      // Events carry the updates; poll only while a swarm runs or the status window is open.
+      // Events carry the updates; poll while a swarm runs or the sidebar is open, so a new
+      // `.swarm/` run shows up even when its `changed` event was missed.
       if (!current || current.active?.status === "running" || wantsLivePolling()) void load();
     }, POLL_MS);
     return () => {
@@ -156,254 +144,6 @@ function createSwarmClient(api, wantsLivePolling) {
     };
   }
   return { snapshot, load, start };
-}
-
-/** The status window above the message box of a session. */
-function createSwarmWindow(api, swarm) {
-  const [tab, setTab] = createSignal("active");
-  const [isOpen, setOpen] = createSignal(false);
-  const [historyIndex, setHistoryIndex] = createSignal(0);
-  const [historyReport, setHistoryReport] = createSignal("");
-  let windowBox;
-  let scroll;
-  /** What had the keyboard before the window opened (the message box). */
-  let focusBefore = null;
-
-  function showTab(key) {
-    setTab(key);
-    windowBox?.focus();
-    scroll?.scrollTo(0);
-    if (key === "history") void showRun(historyIndex());
-  }
-  function switchTab(delta) {
-    const index = TABS.findIndex(([key]) => key === tab());
-    const [key] = TABS[(Math.max(0, index) + delta + TABS.length) % TABS.length];
-    showTab(key);
-  }
-  /** Loads the report of hashed run `index` (wraps) for the History tab. */
-  async function showRun(index) {
-    const runs = swarm.snapshot()?.runs ?? [];
-    if (runs.length === 0) {
-      setHistoryReport("No hashed swarm runs in .swarm/ yet.");
-      return;
-    }
-    const next = ((index % runs.length) + runs.length) % runs.length;
-    setHistoryIndex(next);
-    try {
-      const output = await api.client.rpc(SwarmRpc).selectRun({ id: runs[next].id });
-      setHistoryReport(output.reportText);
-    } catch (error) {
-      reportFailure(error);
-    }
-  }
-  function refresh() {
-    void swarm.load();
-    if (tab() === "history") void showRun(historyIndex());
-  }
-  function open(next = "active") {
-    if (!isOpen()) focusBefore = api.renderer.currentFocusedRenderable;
-    setOpen(true);
-    showTab(next);
-    void swarm.load();
-    // The command leaves the message box focused; take the keyboard once it has settled.
-    setTimeout(() => windowBox?.focus(), 50);
-  }
-  function close() {
-    setOpen(false);
-    if (focusBefore && !focusBefore.isDestroyed) focusBefore.focus();
-    focusBefore = null;
-  }
-
-  function activeLines() {
-    const current = swarm.snapshot();
-    if (!current) return ["Loading swarm state…"];
-    return String(current.reportText ?? "").split("\n");
-  }
-  function waveLines() {
-    const current = swarm.snapshot();
-    const run = current?.active ?? current?.runs?.[0];
-    if (!run) return ["No swarm run to show."];
-    const tasks = Array.isArray(run.tasks) ? run.tasks : [];
-    if (tasks.length === 0) return [`#${run.id} has no tasks recorded.`];
-    const waves = new Map();
-    for (const task of tasks) {
-      const key = task.wave > 0 ? task.wave : 0;
-      if (!waves.has(key)) waves.set(key, []);
-      waves.get(key).push(task);
-    }
-    const lines = [`#${run.id}  ${STATUS_ICON[run.status] ?? "○"} ${run.status}`];
-    for (const [wave, group] of [...waves.entries()].sort((a, b) => a[0] - b[0])) {
-      lines.push("", wave > 0 ? `Wave ${wave}` : "Tasks");
-      for (const task of group) {
-        lines.push(
-          `${TASK_ICON[task.status] ?? "○"} ${task.id.padEnd(8)} ${task.agent.padEnd(14)} ${task.description}`.trimEnd(),
-        );
-      }
-    }
-    return lines;
-  }
-  function historyListLines() {
-    const runs = swarm.snapshot()?.runs ?? [];
-    if (runs.length === 0) return ["No hashed swarm runs in .swarm/ yet."];
-    return runs.map(
-      (run, index) =>
-        `${index === historyIndex() ? "▸" : " "} #${run.id}  ${STATUS_ICON[run.status] ?? "○"} ${String(run.status).padEnd(10)} ${run.objective}`,
-    );
-  }
-  function bodyLines() {
-    const key = tab();
-    if (key === "waves") return waveLines();
-    if (key === "history") {
-      const report = historyReport();
-      return [...historyListLines(), "", ...(report ? report.split("\n") : ["(↑/↓ to load a run)"])];
-    }
-    return activeLines();
-  }
-
-  function Window() {
-    const theme = () => api.theme;
-    /** One color per line: the leading status mark wins; the History selection is accented. */
-    function lineColor(line) {
-      if (line.startsWith("▸")) return theme().text.action.primary.selected;
-      if (line.includes("✗")) return theme().text.feedback.error.base;
-      if (line.includes("●")) return theme().text.action.primary.selected;
-      if (line.includes("✓")) return theme().text.feedback.success.base;
-      return theme().text.base;
-    }
-    // Keys work only while this box has the keyboard; the message box keeps its own keys.
-    api.keymap.layer(() => ({
-      target: () => windowBox,
-      priority: WINDOW_KEY_PRIORITY,
-      commands: [
-        { bind: "tab", title: "Next tab", group: KEYS, run: () => switchTab(1) },
-        { bind: "shift+tab", title: "Previous tab", group: KEYS, run: () => switchTab(-1) },
-        { bind: "1", title: "Active Swarm", group: KEYS, run: () => showTab("active") },
-        { bind: "2", title: "Waves & Tasks", group: KEYS, run: () => showTab("waves") },
-        { bind: "3", title: "Hashed History", group: KEYS, run: () => showTab("history") },
-        {
-          bind: "up",
-          title: "Previous run (History) or line",
-          group: KEYS,
-          run: () => (tab() === "history" ? showRun(historyIndex() - 1) : scroll?.scrollBy(-1)),
-        },
-        {
-          bind: "down",
-          title: "Next run (History) or line",
-          group: KEYS,
-          run: () => (tab() === "history" ? showRun(historyIndex() + 1) : scroll?.scrollBy(1)),
-        },
-        { bind: "r", title: "Refresh", group: KEYS, run: refresh },
-        { bind: "escape", title: "Close", group: KEYS, run: close },
-      ],
-    }));
-    return (() => {
-      var _el = _$createElement("box"),
-        _bar = _$createElement("box"),
-        _title = _$createElement("text"),
-        _titleB = _$createElement("b"),
-        _tabs = _$createElement("box"),
-        _esc = _$createElement("text"),
-        _body = _$createElement("box"),
-        _scroll = _$createElement("scrollbox"),
-        _hint = _$createElement("text");
-      _$use((element) => {
-        windowBox = element;
-      }, _el);
-      _$setProp(_el, "focusable", true);
-      _$setProp(_el, "border", true);
-      _$setProp(_el, "borderStyle", "rounded");
-      _$setProp(_el, "paddingLeft", 1);
-      _$setProp(_el, "paddingRight", 1);
-      _$setProp(_el, "flexDirection", "column");
-      _$setProp(_el, "onMouseDown", () => windowBox?.focus());
-      _$insertNode(_el, _bar);
-      _$setProp(_bar, "flexDirection", "row");
-      _$setProp(_bar, "flexShrink", 0);
-      _$setProp(_bar, "columnGap", 2);
-      _$insertNode(_bar, _title);
-      _$setProp(_title, "wrapMode", "none");
-      _$setProp(_title, "selectable", false);
-      _$insertNode(_title, _titleB);
-      _$insertNode(_titleB, _$createTextNode(WINDOW_TITLE));
-      _$insertNode(_bar, _tabs);
-      _$setProp(_tabs, "flexDirection", "row");
-      _$setProp(_tabs, "columnGap", 2);
-      _$insert(
-        _tabs,
-        () =>
-          TABS.map(([key, label]) =>
-            (() => {
-              var _tab = _$createElement("text");
-              _$setProp(_tab, "wrapMode", "none");
-              _$setProp(_tab, "selectable", false);
-              _$insertNode(_tab, _$createTextNode(label));
-              _$setProp(_tab, "onMouseUp", () => showTab(key));
-              _$effect((_$p) =>
-                _$setProp(
-                  _tab,
-                  "fg",
-                  tab() === key ? theme().text.action.primary.selected : theme().text.muted,
-                  _$p,
-                ),
-              );
-              return _tab;
-            })(),
-          ),
-        null,
-      );
-      _$insertNode(_bar, _esc);
-      _$setProp(_esc, "selectable", false);
-      _$insertNode(_esc, _$createTextNode(`esc`));
-      _$effect((_$p) => _$setProp(_esc, "fg", theme().text.muted, _$p));
-      _$insertNode(_el, _body);
-      _$setProp(_body, "flexDirection", "column");
-      _$setProp(_body, "flexGrow", 1);
-      _$setProp(_body, "flexBasis", 0);
-      _$setProp(_body, "minHeight", 0);
-      _$setProp(_body, "overflow", "hidden");
-      _$setProp(_body, "marginTop", 1);
-      _$insertNode(_body, _scroll);
-      _$use((element) => {
-        scroll = element;
-      }, _scroll);
-      _$setProp(_scroll, "flexGrow", 1);
-      _$setProp(_scroll, "flexBasis", 0);
-      _$setProp(_scroll, "minHeight", 0);
-      _$insert(
-        _scroll,
-        () =>
-          bodyLines().map((line) => {
-            const bar = barSegments(line);
-            if (!bar) {
-              return _$createComponent(TextLine, {
-                text: line,
-                get fg() {
-                  return lineColor(line);
-                },
-              });
-            }
-            return (() => {
-              var _barLine = _$createElement("text");
-              _$setProp(_barLine, "wrapMode", "none");
-              _$setProp(_barLine, "selectable", false);
-              _$setProp(_barLine, "flexShrink", 0);
-              const subject = swarm.snapshot()?.active ?? swarm.snapshot()?.runs?.[0];
-              _$insert(_barLine, () => barSpans(api, subject?.status, bar.before, bar.full, bar.empty, bar.after));
-              return _barLine;
-            })();
-          }),
-        null,
-      );
-      _$insertNode(_el, _hint);
-      _$setProp(_hint, "wrapMode", "none");
-      _$setProp(_hint, "selectable", false);
-      _$setProp(_hint, "flexShrink", 0);
-      _$insertNode(_hint, _$createTextNode(`tab/1-3 switch tab · ↑/↓ cycle runs (History) · r refresh · esc close`));
-      _$effect((_$p) => _$setProp(_hint, "fg", theme().text.muted, _$p));
-      return _el;
-    })();
-  }
-  return { open, isOpen, Slot: Window };
 }
 
 /** The Swarm Fleet panel in the session sidebar; click the title to collapse or expand it. */
@@ -527,54 +267,18 @@ const plugin = Plugin.define({
       sidebarStore ??= api.storage.store("sidebar", { initial: { open: true } });
       return sidebarStore;
     };
+    const sidebarOpen = () => sidebarState()[0].open;
     // `client` is read from OpenCode's context at each use, never copied.
-    let swarmWindow;
-    const swarm = createSwarmClient(api, () => swarmWindow?.isOpen());
-    swarmWindow = createSwarmWindow(api, swarm);
+    const swarm = createSwarmClient(api, () => sidebarOpen());
 
     let disposeMount;
     const disposeApp = api.ui.slot({
       append: "app",
       render: () => {
         // OpenCode mounts this slot again when it reconnects to its server; each mount stops
-        // the last one's client and layers and registers everything again.
+        // the last one's client and registers everything again.
         disposeMount?.();
         const stopSwarm = swarm.start();
-        api.keymap.layer(() => ({
-          mode: "global",
-          commands: [
-            {
-              id: "swarm.status",
-              title: "Swarm: Status Window",
-              group: "OpenCode Swarm",
-              palette: true,
-              // The server lists /swarm_status for Web and Desktop; in the TUI it opens here.
-              slash: { name: "swarm_status" },
-              run: () => swarmWindow.open(),
-            },
-          ],
-        }));
-        // A typed /swarm_status is taken before OpenCode submits the prompt: the editor is
-        // cleared and the status window opens, so nothing reaches the chat. Synchronous on
-        // purpose: a returned promise counts as handled.
-        api.keymap.layer(() => ({
-          priority: TYPED_COMMAND_PRIORITY,
-          commands: [
-            {
-              bind: "return",
-              run: () => {
-                const editor = api.renderer.currentFocusedEditor;
-                const trimmed = editor?.plainText.trim() ?? "";
-                if (!editor || !trimmed.startsWith("/")) return false;
-                // As in OpenCode, the command name ends at the first whitespace.
-                const name = trimmed.slice(1).split(/\s/, 1)[0] ?? "";
-                if (name !== "swarm_status") return false;
-                editor.clear();
-                swarmWindow.open();
-              },
-            },
-          ],
-        }));
         let disposed = false;
         const dispose = () => {
           if (disposed) return;
@@ -603,23 +307,10 @@ const plugin = Plugin.define({
         });
       },
     });
-    const disposeWindow = api.ui.slot({
-      append: "session.composer.top",
-      render: () =>
-        _$createComponent(Show, {
-          get when() {
-            return swarmWindow.isOpen();
-          },
-          get children() {
-            return _$createComponent(swarmWindow.Slot, {});
-          },
-        }),
-    });
     return () => {
       disposeMount?.();
       disposeApp();
       disposeSidebar();
-      disposeWindow();
     };
   },
 });
