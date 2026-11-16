@@ -1,7 +1,7 @@
 ---
 description: Subagent solely for inspecting git status/diffs, staging changes, and creating commits.
 mode: subagent
-model: google-agy/gemini-3.8-flash#high
+model: zai-coding-plan/glm-5.3-flash#low
 permissions:
   - action: edit
     resource: "*"

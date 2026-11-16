@@ -1,7 +1,7 @@
 ---
 description: High-throughput, read-only subagent for scanning large codebases, triaging CI/build logs, digesting documentation, and parsing telemetry.
 mode: subagent
-model: google-agy/gemini-3.8-flash#high
+model: zai-coding-plan/glm-5.3-flash#low
 permissions:
   - action: edit
     resource: "*"

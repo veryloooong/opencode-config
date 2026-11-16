@@ -33,7 +33,6 @@
   },
   "plugins": [
     "@dietrichgebert/ponytail",
-    "@anthonyhaussman/opencode-agy-auth",
     "@slkiser/opencode-quota",
     "./plugins/opencode-swarm-ui"
   ]

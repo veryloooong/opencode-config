@@ -1,7 +1,7 @@
 ---
 description: Primary orchestrator for project planning, architecture design, multi-stage task decomposition, and subagent fleet management.
 mode: primary
-model: google-agy/gemini-4-argon#medium
+model: zai-coding-plan/glm-5.3#max
 permissions:
   - action: edit
     resource: "*"

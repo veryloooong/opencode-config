@@ -1,4 +1,4 @@
----
+1---
 description: Formulate a multi-stage execution plan and delegate tasks across the subagent fleet.
 agent: orchestrator
 subagent: false
